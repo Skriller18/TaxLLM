@@ -19,7 +19,8 @@ class Config:
     checkpoint_interval = 100
     max_seq_len = 256
     checkpoint_dir = "checkpoints"
-
+    accumulation_steps = 1
+    
 # Dataset Class
 class TaxLawDataset(Dataset):
     def __init__(self, tokenizer, file_path):

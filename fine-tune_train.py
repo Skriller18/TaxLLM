@@ -4,6 +4,8 @@ import logging
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, AdamW
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from transformers import get_linear_schedule_with_warmup
+
 
 # Configuration
 class Config:
@@ -62,6 +64,11 @@ def train():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
+    optimizer = AdamW(model.parameters(), lr=Config.lr, weight_decay=0.01)
+    total_steps = len(train_loader) * Config.epochs
+    warmup_steps = int(0.1 * total_steps)  # 10% warm-up
+    scheduler = get_linear_schedule_with_warmup(optimizer, warmup_steps, total_steps)
+    
     for epoch in range(1, Config.epochs + 1):
         total_loss = 0
         for batch_idx, batch in enumerate(train_loader):
@@ -70,9 +77,14 @@ def train():
             
             outputs = model(inputs, attention_mask=masks, labels=inputs)
             loss = outputs.loss
+            loss = loss / Config.accumulation_steps
             loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            
+            if (batch_idx + 1) % Config.accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                optimizer.zero_grad()
+                scheduler.step()
             
             total_loss += loss.item()
             

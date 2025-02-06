@@ -112,7 +112,7 @@ def validate(model, val_loader, device):
         for batch in val_loader:
             inputs = batch['input_ids'].to(device)
             masks = batch['attention_mask'].to(device)
-            outputs = model(inputs, attention_mask=mashes, labels=inputs)
+            outputs = model(inputs, attention_mask=masks, labels=inputs)
             total_loss += outputs.loss.item()
     return total_loss / len(val_loader)
 

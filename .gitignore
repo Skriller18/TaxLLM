@@ -4,3 +4,5 @@ models/
 gpt-2/
 runs/
 checkpoints/
+taxlaw_db/
+.env

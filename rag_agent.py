@@ -145,7 +145,7 @@ if __name__ == "__main__":
         "chunk_overlap": 256,
         "embedding_model": "BAAI/bge-large-en-v1.5",
         "llm_name": "meta-llama/Meta-Llama-3-8B-Instruct",
-        "hf_token": os.getenv("HF_TOKEN")  # Required for Llama 3
+        "hf_token": os.getenv("HF_TOKEN")  # Load from .env file
     }
 
     tax_rag = TaxLawRAGSystem(config)

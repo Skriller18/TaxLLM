@@ -55,7 +55,7 @@ class TaxLawRAGSystem:
         """Create FAISS vector store with modern embeddings"""
         embeddings = HuggingFaceEmbeddings(
             model_name=self.config["embedding_model"],
-            model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+            model_kwargs={"device": "cuda:1" if torch.cuda.is_available() else "cpu"},
             encode_kwargs={"normalize_embeddings": True}
         )
         
@@ -82,7 +82,7 @@ class TaxLawRAGSystem:
         model = AutoModelForCausalLM.from_pretrained(
             self.config["llm_name"],
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map={"": "cuda:1"},
             attn_implementation="flash_attention_2"
         )
 
@@ -108,20 +108,20 @@ class TaxLawRAGSystem:
             "Provide clear explanations with section references when available. "
             "If you're unsure about any information, clearly state this."
         )
-
+    
         prompt_template = (
-            "<|system|>\n{system_prompt}</s>\n"
+            f"<|system|>\n{system_prompt}</s>\n"
             "<|user|>\n"
             "Context: {context}\n"
-            "Question: {question}</s>\n"
+            "Question: {{query}}</s>\n"  # Double braces for proper formatting
             "<|assistant|>"
         )
-
+        
         prompt = PromptTemplate(
             template=prompt_template,
-            input_variables=["system_prompt", "context", "question"]
+            input_variables=["context", "query"]
         )
-
+    
         return RetrievalQA.from_chain_type(
             llm=self.load_llm(),
             chain_type="stuff",
@@ -134,7 +134,9 @@ class TaxLawRAGSystem:
                 "document_separator": "\n\n",
                 "document_variable_name": "context"
             },
-            return_source_documents=True
+            return_source_documents=True,
+            input_key="query",
+            output_key="result"
         )
 
 if __name__ == "__main__":
@@ -161,7 +163,10 @@ if __name__ == "__main__":
     qa_chain = tax_rag.create_rag_chain(vector_db)
 
     query = "Explain the tax deductions available under Section 80C"
-    response = qa_chain.invoke({"query": query, "system_prompt": "You are a expert Indian Tax Law assistant."})
+    # Before invocation
+    print("Chain input expectations:", qa_chain.input_keys)
+    response = qa_chain.invoke({"query": query})  
+
 
     print("\nAnswer:", response["result"])
     print("\nSources:")

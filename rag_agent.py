@@ -55,7 +55,7 @@ class TaxLawRAGSystem:
         """Create FAISS vector store with modern embeddings"""
         embeddings = HuggingFaceEmbeddings(
             model_name=self.config["embedding_model"],
-            model_kwargs={"device": "cuda:1" if torch.cuda.is_available() else "cpu"},
+            model_kwargs={"device": "cuda:0" if torch.cuda.is_available() else "cpu"},
             encode_kwargs={"normalize_embeddings": True}
         )
         
@@ -82,7 +82,7 @@ class TaxLawRAGSystem:
         model = AutoModelForCausalLM.from_pretrained(
             self.config["llm_name"],
             quantization_config=bnb_config,
-            device_map={"": "cuda:1"},
+            device_map={"": "cuda:0"},
             attn_implementation="flash_attention_2"
         )
 

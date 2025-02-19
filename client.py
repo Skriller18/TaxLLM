@@ -46,7 +46,7 @@ def send_message(user_message):
     st.session_state.messages.append({"sender": "User", "message": user_message})
     try:
         # Send the query to the FastAPI endpoint
-        response = requests.post("http://localhost:8000/ask", json={"query": user_message})
+        response = requests.post("http://localhost:8000/ask", json={"question": user_message})
         if response.status_code == 200:
             data = response.json()
             if "result" in data:

@@ -1,16 +1,15 @@
 import os
 import torch
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uvicorn
 from huggingface_hub import login
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings, HuggingFacePipeline
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -24,7 +23,7 @@ load_dotenv()
 
 app = FastAPI()
 
-# Define configuration for the model and data
+# Configuration for model and data
 config = {
     "pdf_path": "data/CA.pdf",
     "save_dir": "taxlaw_db",
@@ -102,9 +101,13 @@ text_generation_pipe = pipeline(
     return_full_text=False
 )
 
-llm_pipeline = HuggingFacePipeline(pipeline=text_generation_pipe)
+# Subclass HuggingFacePipeline so that input_variables is declared as a field (recognized by Pydantic)
+class CustomHuggingFacePipeline(HuggingFacePipeline):
+    input_variables: list = Field(default_factory=lambda: ["question", "context"])
 
-# Build the prompt with a system message
+llm_pipeline = CustomHuggingFacePipeline(pipeline=text_generation_pipe)
+
+# Build the prompt with a system message.
 system_prompt = (
     "You are an expert Indian Tax Law assistant. "
     "Always answer based on the provided legal context. "
@@ -113,14 +116,17 @@ system_prompt = (
 )
 prompt_template = (
     f"<|system|>\n{system_prompt}</s>\n"
-    "<|user|>\n"
-    "Context: {{context}}\n"
-    "Question: {{query}}</s>\n"  # Use double braces for formatting
-    "<|assistant|>"
+    f"<|user|>\n"
+    f"Context: {{context}}\n"
+    f"Question: {{question}}</s>\n"
+    f"<|assistant|>"
 )
-prompt = PromptTemplate(template=prompt_template, input_variables=["context", "query"])
 
-# Create the RetrievalQA chain
+# Explicitly set the input_variables so the prompt knows to expect 'context' and 'question'
+prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+print("Prompt input variables:", prompt.input_variables)  # Should output: ['context', 'question']
+
+# Create the RetrievalQA chain.
 qa_chain = RetrievalQA.from_chain_type(
     llm=llm_pipeline,
     chain_type="stuff",
@@ -134,19 +140,19 @@ qa_chain = RetrievalQA.from_chain_type(
         "document_variable_name": "context"
     },
     return_source_documents=True,
-    input_key="query",
+    input_key="question",  # Changed from "query" to "question"
     output_key="result"
 )
 
-# Define request model for FastAPI
+# Define request model for FastAPI using 'question' as the key.
 class QueryRequest(BaseModel):
-    query: str
+    question: str
 
 @app.post("/ask")
 async def ask_question(request: QueryRequest):
-    query = request.query
+    question = request.question
     try:
-        response = qa_chain.invoke({"query": query})
+        response = qa_chain.invoke({"question": question})
         # Extract a brief snippet from each source document for reference
         sources = []
         for doc in response.get("source_documents", []):

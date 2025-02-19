@@ -20,4 +20,6 @@ pypdf
 faiss-gpu
 bitsandbytes
 accelerate==0.30.0
+fastapi
+uvicorn
 ## pip install -U langchain-huggingface langchain

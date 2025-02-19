@@ -72,7 +72,7 @@ for chat in st.session_state.messages:
     if chat["sender"] == "User":
         st.markdown(
             f"""
-            <div style='text-align: right; background-color: #DCF8C6; padding: 10px; border-radius: 10px; margin: 8px;'>
+            <div style='text-align: right; background-color: #0052cc; color: #ffffff; padding: 10px; border-radius: 10px; margin: 8px;'>
                 <strong>You:</strong> {chat['message']}
             </div>
             """, unsafe_allow_html=True
@@ -80,7 +80,7 @@ for chat in st.session_state.messages:
     else:
         st.markdown(
             f"""
-            <div style='text-align: left; background-color: #F1F0F0; padding: 10px; border-radius: 10px; margin: 8px;'>
+            <div style='text-align: left; background-color: #36393f; color: #ffffff; padding: 10px; border-radius: 10px; margin: 8px;'>
                 <strong>Assistant:</strong> {chat['message']}
             </div>
             """, unsafe_allow_html=True

@@ -1,26 +1,27 @@
 import os
 import logging
 import torch
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, AdamW, get_linear_schedule_with_warmup
+from transformers import LlamaForCausalLM, LlamaTokenizer, AdamW, get_linear_schedule_with_warmup
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 # Configuration
 class Config:
-    model_name = "gpt2"
+    model_name = "meta-llama/Llama-2-7b"  # Change to your preferred LLaMA model
     train_data = "data/tax_law_train.txt"
     val_data = "data/tax_law_val.txt"
-    batch_size = 80
+    batch_size = 16  # Reduced batch size as LLaMA is larger
     epochs = 1000
-    lr = 3e-5
+    lr = 1e-5  # Adjusted learning rate for LLaMA
     log_interval = 10
     checkpoint_interval = 100
-    max_seq_len = 256
+    max_seq_len = 512  # LLaMA supports longer sequences
     checkpoint_dir = "checkpoints"
-    accumulation_steps = 1  # Gradient accumulation
-    dropout_rate = 0.2  # Added dropout
+    accumulation_steps = 4  # Increased for memory management
+    dropout_rate = 0.1  # Standard dropout for LLaMA
     weight_decay = 0.01  # L2 regularization
     patience = 5  # Early stopping patience
+    use_8bit = True  # Optional: for lower memory usage
 
 # Dataset Class
 class TaxLawDataset(Dataset):
@@ -47,24 +48,45 @@ class TaxLawDataset(Dataset):
         }
 
 # Initialize Training
-tokenizer = GPT2Tokenizer.from_pretrained(Config.model_name)
+tokenizer = LlamaTokenizer.from_pretrained(Config.model_name)
 tokenizer.pad_token = tokenizer.eos_token
 
-# Load model with dropout
-model = GPT2LMHeadModel.from_pretrained(
-    Config.model_name,
-    hidden_dropout_prob=Config.dropout_rate,
-    attention_probs_dropout_prob=Config.dropout_rate
-)
+# Load model - LLaMA has different parameter naming
+if Config.use_8bit:
+    model = LlamaForCausalLM.from_pretrained(
+        Config.model_name,
+        load_in_8bit=True,
+        device_map="auto"
+    )
+else:
+    model = LlamaForCausalLM.from_pretrained(Config.model_name)
 
+# Prepare datasets
 train_dataset = TaxLawDataset(tokenizer, Config.train_data)
 val_dataset = TaxLawDataset(tokenizer, Config.val_data)
 
 train_loader = DataLoader(train_dataset, batch_size=Config.batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=Config.batch_size)
 
-# Optimizer with weight decay
-optimizer = AdamW(model.parameters(), lr=Config.lr, weight_decay=Config.weight_decay)
+# For parameter-efficient fine-tuning (optional but recommended for LLaMA)
+from peft import get_peft_model, LoraConfig, TaskType
+
+# PEFT configuration - using LoRA for efficient fine-tuning
+peft_config = LoraConfig(
+    task_type=TaskType.CAUSAL_LM,
+    inference_mode=False,
+    r=8,
+    lora_alpha=32,
+    lora_dropout=0.1,
+    target_modules=["q_proj", "v_proj"]
+)
+
+if not Config.use_8bit:
+    model = get_peft_model(model, peft_config)
+    
+# Only optimize trainable parameters if using PEFT
+trainable_params = [p for p in model.parameters() if p.requires_grad]
+optimizer = AdamW(trainable_params, lr=Config.lr, weight_decay=Config.weight_decay)
 
 # Learning rate scheduler
 total_steps = len(train_loader) * Config.epochs
